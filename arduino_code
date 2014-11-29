@@ -1,0 +1,139 @@
+#include <SPI.h>
+#include <WiFi.h>
+
+char ssid[] = "Holspot_Hackathon";     //  your network SSID (name)
+char pass[] = "hackathon";    // your network password
+char path[] =  "/Aeneas/arduino?";
+int status = WL_IDLE_STATUS;     // the Wifi radio's status
+int analogPin = 0;
+boolean movement = false;
+boolean panic = false;
+
+// Initialize the Wifi client library
+WiFiClient client;
+
+// server address:
+//char server[] = "www.arduino.cc";
+IPAddress server(83,212,100,212);
+
+unsigned long lastConnectionTime = 0;            // last time you connected to the server, in milliseconds
+const unsigned long postingInterval = 10L * 1000L; // delay between updates, in milliseconds
+
+void setup() {
+  // initialize serial:
+  Serial.begin(9600);
+  pinMode(analogPin, INPUT);
+  attachInterrupt(0, blink, RISING);
+  attachInterrupt(1, panic_press, RISING);
+  //String fv = WiFi.firmwareVersion();
+  //if ( fv != "1.1.0" )
+    //Serial.println("Please upgrade the firmware");
+
+  // attempt to connect using WPA2 encryption:
+  Serial.println("Attempting to connect to WPA network...");
+  status = WiFi.begin(ssid, pass);
+
+  // if you're not connected, stop here:
+  if ( status != WL_CONNECTED) {
+    Serial.println("Couldn't get a wifi connection");
+    while(true);
+  }
+  // if you are connected, print out info about the connection:
+  else {
+    Serial.println("Connected to network");
+  }
+  printWifiStatus();
+}
+
+void blink()
+{
+  movement = true;
+}
+  
+void panic_press()
+{
+  panic = true;
+}
+
+void getData(){
+  byte mac[6]; 
+  WiFi.macAddress(mac);
+  //String macx = "mac="+String(mac[0],HEX)+":"+String(mac[1],HEX)+":"+String(mac[2],HEX)+":"+String(mac[3],HEX)+":"+String(mac[4],HEX)+":"+String(mac[5],HEX);
+  String macx = "mac=89:44:44";
+  String pulse = "pulse="+String((analogRead(analogPin)-928)*2);
+  String mov = "move=0";
+  if (movement) {
+    mov = "move=1";
+    movement = false;
+  }
+  String panic_str = "panic=0";
+  if (panic) {
+    panic_str = "panic=1";
+    panic = false;
+  }
+  float lat_num = (float)40.581+(float)random(0,54)*(float)0.001; 
+  float lng_num =(float)22.953+(float)random(0,28)*(float)0.001;
+  String lat = "lat="+String(lat_num,3);
+  String lng = "lng="+String(lng_num,3);
+  String res = pulse+"&"+lat+"&"+lng+"&"+macx+"&"+mov+"&"+panic_str;
+  Serial.println(path+res);
+  httpRequest(path+res);
+  lastConnectionTime = millis();
+}
+
+void loop() {
+ while (client.available()) {
+    char c = client.read();
+    Serial.write(c);
+  }
+  //int val = digitalRead(inPin);  
+  //Serial.println(val);
+  
+  // if ten seconds have passed since your last connection,
+  // then connect again and send data:
+  if (millis() - lastConnectionTime > postingInterval) {
+    getData();
+    //httpRequest();
+    //getData();
+  }
+}
+
+void httpRequest(String send_path) {
+  // close any connection before send a new request.
+  // This will free the socket on the WiFi shield
+  client.stop();
+
+  // if there's a successful connection:
+  if (client.connect(server, 80)) {
+    Serial.println("connecting...");
+    // send the HTTP PUT request:
+    client.print("GET ");
+    client.print(send_path);
+    client.println(" HTTP/1.0");
+    client.println();
+
+    // note the time that the connection was made:
+    lastConnectionTime = millis();
+  }
+  else {
+    // if you couldn't make a connection:
+    Serial.println("connection failed");
+  }
+}
+
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+}
