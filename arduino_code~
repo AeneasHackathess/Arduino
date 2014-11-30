@@ -1,11 +1,11 @@
-  #include <SPI.h>
+#include <SPI.h>
 #include <WiFi.h>
 
 char ssid[] = "Holspot_Hackathon";     //  your network SSID (name)
 char pass[] = "hackathon";    // your network password
 char path[] =  "/Aeneas/arduino?";
 int status = WL_IDLE_STATUS;     // the Wifi radio's status
-int analogPin = 3;
+int analogPin = 0;
 boolean movement = false;
 boolean panic = false;
 
@@ -22,6 +22,7 @@ const unsigned long postingInterval = 10L * 1000L; // delay between updates, in 
 void setup() {
   // initialize serial:
   Serial.begin(9600);
+  pinMode(analogPin, INPUT);
   attachInterrupt(0, blink, RISING);
   attachInterrupt(1, panic_press, RISING);
   //String fv = WiFi.firmwareVersion();
@@ -41,11 +42,6 @@ void setup() {
   else {
     Serial.println("Connected to network");
   }
-  if(client.connect(server, 80)){
-    Serial.println("connecting...");
-  }else{
-    Serial.println("connection failed...");
-  }
   printWifiStatus();
 }
 
@@ -60,7 +56,6 @@ void panic_press()
 }
 
 void getData(){
-  client.available();
   byte mac[6]; 
   WiFi.macAddress(mac);
   //String macx = "mac="+String(mac[0],HEX)+":"+String(mac[1],HEX)+":"+String(mac[2],HEX)+":"+String(mac[3],HEX)+":"+String(mac[4],HEX)+":"+String(mac[5],HEX);
@@ -83,6 +78,7 @@ void getData(){
   String res = pulse+"&"+lat+"&"+lng+"&"+macx+"&"+mov+"&"+panic_str;
   Serial.println(path+res);
   httpRequest(path+res);
+  lastConnectionTime = millis();
 }
 
 void loop() {
@@ -92,6 +88,7 @@ void loop() {
   }
   //int val = digitalRead(inPin);  
   //Serial.println(val);
+  
   // if ten seconds have passed since your last connection,
   // then connect again and send data:
   if (millis() - lastConnectionTime > postingInterval) {
@@ -105,33 +102,23 @@ void httpRequest(String send_path) {
   // close any connection before send a new request.
   // This will free the socket on the WiFi shield
   client.stop();
+
   // if there's a successful connection:
-  if (client.connected()) {
+  if (client.connect(server, 80)) {
     Serial.println("connecting...");
     // send the HTTP PUT request:
     client.print("GET ");
     client.print(send_path);
     client.println(" HTTP/1.0");
     client.println();
- 
+
     // note the time that the connection was made:
     lastConnectionTime = millis();
   }
   else {
-  if(client.connect(server, 80)){
-    Serial.println("connecting...");
-    client.print("GET ");
-    client.print(send_path);
-    client.println(" HTTP/1.0");
-    client.println();
- 
-    // note the time that the connection was made:
-    lastConnectionTime = millis();
-  }else{
-    Serial.println("connection failed...");
+    // if you couldn't make a connection:
+    Serial.println("connection failed");
   }
-  }
-  
 }
 
 void printWifiStatus() {
